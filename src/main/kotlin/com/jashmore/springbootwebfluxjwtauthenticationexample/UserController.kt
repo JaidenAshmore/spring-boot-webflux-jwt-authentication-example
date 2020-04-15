@@ -1,5 +1,6 @@
 package com.jashmore.springbootwebfluxjwtauthenticationexample
 
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
@@ -16,20 +17,31 @@ data class UserCredentials(val email: String, val password: String)
 @RestController
 @RequestMapping("/user")
 class UserController {
-    private val myself: User = User("email@example.com")
+    private val users: MutableMap<String, UserCredentials> = mutableMapOf(
+            "email@example.com" to UserCredentials("email@example.com", "pw")
+    )
 
-    @PutMapping
+    @PutMapping("/signup")
     fun signUp(@RequestBody user: UserCredentials): Mono<ResponseEntity<Void>> {
+        users[user.email] = user
+
         return Mono.just(ResponseEntity.noContent().build())
     }
 
-    @PostMapping
+    @PostMapping("/login")
     fun login(@RequestBody user: UserCredentials): Mono<ResponseEntity<Void>> {
-        return Mono.just(ResponseEntity.noContent().build())
+        return Mono.justOrEmpty(users[user.email])
+                .filter { it.password == user.password }
+                .map { ResponseEntity.noContent().build<Void>() }
+                .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()))
     }
 
     @GetMapping
     fun getMyself(): Mono<ResponseEntity<User>> {
-        return Mono.just(ResponseEntity.ok(myself))
+        val emailAddress = "email@example.com" // ultimately this will be obtained from the JWT
+
+        return Mono.justOrEmpty(users[emailAddress])
+                .map { ResponseEntity.ok(User(it.email)) }
+                .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()))
     }
 }
