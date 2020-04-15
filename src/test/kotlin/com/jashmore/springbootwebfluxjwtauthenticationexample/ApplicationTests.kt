@@ -1,7 +1,9 @@
 package com.jashmore.springbootwebfluxjwtauthenticationexample
 
+import io.jsonwebtoken.Jwt
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
@@ -12,6 +14,9 @@ class ApplicationTests {
 
 	@LocalServerPort
 	var serverPort: Int? = null
+
+	@Autowired
+	lateinit var jwtSigner: JwtSigner
 
 	@Test
 	fun whenLoggedInUserCanGetOwnDetails() {
@@ -83,6 +88,25 @@ class ApplicationTests {
 
 		// assert
 		assertThat(response?.statusCode()).isEqualTo(HttpStatus.NO_CONTENT)
+	}
+
+	@Test
+	fun `successful login to known account should return Jwt cookie`() {
+		// arrange
+		val webClient = WebClient.builder()
+				.baseUrl("http://localhost:${serverPort}")
+				.build()
+
+		// act
+		val response = webClient.post()
+				.uri("/user/login")
+				.bodyValue(UserCredentials("email@example.com", "pw"))
+				.exchange()
+				.block()
+		val jwtToken = response?.cookies()?.get("X-Auth")?.get(0)?.value ?: throw RuntimeException("No JWT Token in response")
+
+		// assert
+		assertThat(jwtSigner.validateJwt(jwtToken)).isNotNull
 	}
 
 	@Test
