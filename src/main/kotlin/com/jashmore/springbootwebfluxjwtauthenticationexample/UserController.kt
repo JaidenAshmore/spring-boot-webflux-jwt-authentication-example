@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import reactor.core.publisher.Mono
+import java.security.Principal
 
 data class User(val email: String)
 
@@ -50,10 +51,8 @@ class UserController(private val jwtSigner: JwtSigner) {
     }
 
     @GetMapping
-    fun getMyself(): Mono<ResponseEntity<User>> {
-        val emailAddress = "email@example.com" // ultimately this will be obtained from the JWT
-
-        return Mono.justOrEmpty(users[emailAddress])
+    fun getMyself(principal: Principal): Mono<ResponseEntity<User>> {
+        return Mono.justOrEmpty(users[principal.name])
                 .map { ResponseEntity.ok(User(it.email)) }
                 .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()))
     }

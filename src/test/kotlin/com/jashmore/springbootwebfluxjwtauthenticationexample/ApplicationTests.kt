@@ -1,12 +1,12 @@
 package com.jashmore.springbootwebfluxjwtauthenticationexample
 
-import io.jsonwebtoken.Jwt
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
+import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.reactive.function.client.WebClient
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -17,24 +17,6 @@ class ApplicationTests {
 
 	@Autowired
 	lateinit var jwtSigner: JwtSigner
-
-	@Test
-	fun whenLoggedInUserCanGetOwnDetails() {
-		// arrange
-		val webClient = WebClient.builder()
-				.baseUrl("http://localhost:${serverPort}")
-				.build()
-
-		// act
-		val response = webClient.get()
-				.uri("/user")
-				.exchange()
-				.block()
-
-		// assert
-		assertThat(response?.statusCode()).isEqualTo(HttpStatus.OK)
-		assertThat(response?.bodyToFlux(User::class.java)?.blockFirst()).isEqualTo(User("email@example.com"))
-	}
 
 	@Test
 	fun loginToUnknownAccountReturnsUnauthorised() {
@@ -131,5 +113,54 @@ class ApplicationTests {
 
 		// assert
 		assertThat(loginResponse?.statusCode()).isEqualTo(HttpStatus.NO_CONTENT)
+	}
+
+	@Test
+	fun `cannot obtain user details if not logged in`() {
+		// arrange
+		val webClient = WebClient.builder()
+				.baseUrl("http://localhost:${serverPort}")
+				.build()
+
+		// act
+		val response = webClient.get()
+				.uri("/user")
+				.exchange()
+				.block()
+
+		// assert
+		assertThat(response?.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED)
+	}
+
+	@Test
+	fun `can obtain own user details when logged in`() {
+		// arrange
+		val webClient = WebClient.builder()
+				.baseUrl("http://localhost:${serverPort}")
+				.build()
+		webClient.put()
+				.uri("/user/signup")
+				.bodyValue(UserCredentials("new@example.com", "pw"))
+				.exchange()
+				.block()
+		val loginResponse = webClient.post()
+				.uri("/user/login")
+				.bodyValue(UserCredentials("new@example.com", "pw"))
+				.exchange()
+				.block() ?: throw RuntimeException("Should have gotten a response")
+		val responseCookies = loginResponse.cookies()
+				.map { it.key to it.value.map { cookie -> cookie.value } }
+				.toMap()
+
+		// act
+		val response = webClient.get()
+				.uri("/user")
+				.cookies { it.addAll(LinkedMultiValueMap(responseCookies)) }
+				.exchange()
+				.block()
+
+		// assert
+		assertThat(response?.statusCode()).isEqualTo(HttpStatus.OK)
+		assertThat(response?.bodyToFlux(User::class.java)?.blockFirst()).isEqualTo(User("new@example.com"))
 	}
 }
